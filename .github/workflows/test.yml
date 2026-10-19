@@ -1,0 +1,79 @@
+name: NLCS++ Validation Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-node:
+    name: Node.js validation test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: node/package-lock.json
+
+      - name: Install xmllint
+        run: sudo apt-get install -y libxml2-utils
+
+      - name: Install dependencies
+        working-directory: node
+        run: npm ci
+
+      - name: Transpile XSLT stylesheet
+        working-directory: node
+        run: npm run transpile
+
+      - name: Run validation
+        working-directory: node
+        run: npm run validate -- xml=../nlcs-example.xml
+
+      - name: Validate SVRL output
+        working-directory: node
+        run: |
+          xmllint --noout nlcs-example.svrl.xml
+          grep -q 'schematron-output' nlcs-example.svrl.xml
+
+  test-java:
+    name: Java validation test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+
+      - name: Install xmllint
+        run: sudo apt-get install -y libxml2-utils
+
+      - name: Install Saxon-HE and validation rules
+        working-directory: java
+        run: sh install.sh
+
+      - name: Run validation
+        working-directory: java
+        run: |
+          java -jar saxon-he.jar \
+            -xsl:dist/src/base/v12.xsl \
+            -s:../nlcs-example.xml \
+            -o:nlcs-example.svrl.xml
+
+      - name: Validate SVRL output
+        working-directory: java
+        run: |
+          xmllint --noout nlcs-example.svrl.xml
+          grep -q 'schematron-output' nlcs-example.svrl.xml
